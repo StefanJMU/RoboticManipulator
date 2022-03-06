@@ -13,6 +13,11 @@ from ._exception import ControlException
  
 class ManipulatorCore :
     
+    #
+    # Add differentition between torch and numpy attributes
+    # adapt the functions to use the correct attributes
+    # Let the joint_speed be handled by the Joint class again
+    #
     def __init__(self,
                  joints : List[Joint], 
                  center_of_masses : np.array = None) :

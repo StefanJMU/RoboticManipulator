@@ -61,4 +61,4 @@ def matmul(*matrices) :
         #matmul alloctes a new tensor => intermediate tensors are independently allocated tensors
         intermediates.append(intermediates[-1] @ matrices[i])
     
-    return intermediates
+    return matrix

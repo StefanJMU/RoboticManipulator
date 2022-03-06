@@ -26,7 +26,6 @@ class Joint :
             raise ValueError('angle_unit is required to be in [degrees,radians].'
                              f'Got {angle_unit}')
         
-        self.joint_speed = 0
         self.angle_unit = angle_unit
         self.joint_type = joint_type
         
@@ -63,21 +62,6 @@ class Joint :
             self.joint_angle[0] = self.sanitize_angle(value)
         else :
             self.joint_length[0] = self.sanitize_length(value)
-            
-    def set_joint_speed(self, value : float) :
-    
-        self.joint_speed
-        
-    def get_speed(self) :
-        return self.joint_speed
-        
-    def is_revolute(self) :
-    
-        if self.joint_type = 'revolute' :
-        
-            return 1
-            
-        return 0
 
     def get_transformation(self) :
         
@@ -91,3 +75,10 @@ class Joint :
         return self.generalized_var
     
     
+    def is_revolute(self) :
+    
+        if self.joint_type = 'revolute' :
+        
+            return 1
+            
+        return 0
