@@ -1,6 +1,5 @@
-
+import numpy as np
 from ManipulatorCore import Joint, ManipulatorCore
-
 
 bot = ManipulatorCore([
 
@@ -12,9 +11,11 @@ bot = ManipulatorCore([
     Joint('prismatic', 2, 3, 6, 1)
 ])
 
-print(f'Arm matrix {bot.arm_matrix}')
-print(f'Inverse arm matrix {bot.inverse_arm_matrix}')
-print(f'Tool configuration vector {bot.tool_config_vector}')
-print(f'Tool jacobian {bot.tool_jacobian}')
-print(f'Resolve motion rate control matrix {bot.rmrc_matrix}')
-print(f'Dexterity assessment {bot.degrees_of_freedom}')
+np.set_printoptions(precision=3, suppress=True)
+
+print(f'Arm matrix: \n {bot.arm_matrix}')
+print(f'Inverse arm matrix: \n {bot.inverse_arm_matrix}')
+print(f'Tool configuration vector: \n {bot.tool_config_vector}')
+print(f'Tool jacobian: \n {bot.tool_jacobian}')
+print(f'Resolve motion rate control matrix: \n {bot.rmrc_matrix}')
+print(f'Dexterity assessment: \n {bot.degrees_of_freedom}')
