@@ -2,29 +2,30 @@
 import numpy as np
 import torch
 from torch import tensor as tns
-
 from ._transformation_constants import *
 
-def rot(angle, axis : int) :
+def rot(angle, axis: int):
     
     """
         fundamental homogenous rotation matrix
     """
-    if axis not in [0,1,2] :
+    if axis not in [0, 1, 2]:
         raise ValueError('Fundamental rotation matrix axis are selected from {0,1,2}.'
                          f'Got {axis}')
                          
-    cos,sin = torch.cos(angle), torch.sin(angle)
-    return sockets[axis] + cos_mask[axis] * cos + sin_mask[axis] * sin
+    cos, sin = torch.cos(angle), torch.sin(angle)
+    return sockets[axis] + cos_mask[axis]*cos + sin_mask[axis]*sin
 
-def tran(x_tran = ZERO_1D, y_tran = ZERO_1D, z_tran = ZERO_1D) :
+
+def tran(x_tran = ZERO_1D, y_tran = ZERO_1D, z_tran = ZERO_1D):
     
     """
         fundamental homogenous translation matrix
     """
-    return sockets[-1] + x_tran * trans_mask[0] + y_tran * trans_mask[1] + z_tran * trans_mask[2]
+    return sockets[-1] + x_tran*trans_mask[0] + y_tran*trans_mask[1] + z_tran*trans_mask[2]
 
-def transformation_from_kinematic_parameters(theta,d,a,alpha) :
+
+def transformation_from_kinematic_parameters(theta, d, a, alpha):
     
     """
         Transformation matrix from kinematic parameters
@@ -47,18 +48,21 @@ def transformation_from_kinematic_parameters(theta,d,a,alpha) :
             tran(a),
             rot(alpha,0),
     ]
-    
-    return matmul(*matrices)
+    return matmul(*matrices, retain_intermediates=False)
 
-def matmul(*matrices) :
+
+def matmul(*matrices, retain_intermediates = True):
     
     """
         Utility function : multiply matrices from left to right
         Retains intermediate results
     """
     intermediates = [matrices[0]]
-    for i in range(1,len(matrices)) :
+    for i in range(1, len(matrices)):
         #matmul alloctes a new tensor => intermediate tensors are independently allocated tensors
         intermediates.append(intermediates[-1] @ matrices[i])
-    
-    return intermediates
+
+    if retain_intermediates:
+        return intermediates
+    else:
+        return intermediates[-1]

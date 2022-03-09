@@ -130,3 +130,6 @@ dmypy.json
 
 #Windows backup file
 *.bak
+
+#pycharm
+.idea/
