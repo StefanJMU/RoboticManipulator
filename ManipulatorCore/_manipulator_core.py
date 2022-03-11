@@ -10,6 +10,9 @@ from scipy.linalg import svd
 import torch
 import numpy as np
 
+from bayes_opt import BayesianOptimization
+
+
 
 class ManipulatorCore:
 
@@ -42,17 +45,19 @@ class ManipulatorCore:
         self.joints = joints
 
     def _delete_targets(self):
-        delattr(self, 'arm_matrices')
-        delattr(self, 'arm_matrix')
-        delattr(self, 'inverse_arm_matrix')
-        delattr(self, 'tool_config_torch')
-        delattr(self, 'tool_jacobian')
-        delattr(self, 'tool_jacobian_second')
-        delattr(self, 'rmrc_matrix')
-        delattr(self, 'linear_link_velocity')
-        delattr(self, 'angular_link_velocity')
-        delattr(self, 'gravity_loading')
-    
+        for target in ['arm_matrices',
+                      'arm_matrix',
+                      'inverse_arm_matrix',
+                      'tool_config_torch',
+                      'tool_config_vector',
+                      'tool_jacobian',
+                      'tool_jacobian_second',
+                      'rmrc_matrix',
+                      'linear_link_velocity',
+                      'angular_link_velocity',
+                      'gravity_loading']:
+            self.__dict__.pop(target, None)
+
     @cached_property
     def arm_matrices(self):
         return self._calculate_arm_matrix()
@@ -98,7 +103,7 @@ class ManipulatorCore:
         
     @cached_property
     def angular_link_velocity(self):
-        if self.coms is None :
+        if self.coms is None:
             raise AttributeError('Cannot calculate linear link velocities. Centers of masses of the links have not been specified')
         return self._calculate_angular_link_velocity()
 
@@ -109,9 +114,9 @@ class ManipulatorCore:
 
     def update_config(self, actuation: List = None, joint_speeds: List = None):
         self._delete_targets()
-        if actuation is None :  #think about that: a warning is more reasonable
+        if actuation is None:  #think about that: a warning is more reasonable
             actuation = np.zeros((len(self.joints),))
-        elif len(actuation) != len(self.actuation) :
+        elif len(actuation) != len(self.joints):
             raise ValueError(f'Setting actuation requires {len(self.joints)} parameters.')
             
         #
@@ -119,7 +124,7 @@ class ManipulatorCore:
         #
         for i, joint in enumerate(self.joints):
             joint.set_variable(actuation[i])
-            joint.set_speed(joint_speeds[i])
+            #joint.set_speed(joint_speeds[i])  # TODO
         
     def _calculate_arm_matrix(self):
         local_transforms = [joint.get_transformation() for joint in self.joints]
@@ -147,7 +152,7 @@ class ManipulatorCore:
 
         final_joint = self.joints[-1]
         if final_joint.joint_type == 'revolute':
-            approach_vector = torch.exp(final_joint.get_joint_variable() / np.pi) * approach_vector
+            approach_vector = torch.exp(final_joint.get_variable() / np.pi) * approach_vector
         
         return torch.cat([tool_tip_position, approach_vector], axis=0)
     
@@ -175,10 +180,10 @@ class ManipulatorCore:
 
     def _calculate_degrees_of_freedom(self):
         u, s, vh = svd(self.tool_jacobian)
-        dofs = s.shape[0]
+        dofs = np.count_nonzero(s)
         dof_loss = dofs - min(self.tool_jacobian.shape)
-        tipping_point = s[-1]
-        return dofs, dof_loss, tipping_point
+        condition_number = s[dofs - 1] / s[0]
+        return dofs, dof_loss, condition_number
 
     def _calculate_linear_link_velocities(self, joint_speeds):
 
@@ -224,6 +229,46 @@ class ManipulatorCore:
 
             return angular_velocities.numpy()
 
+    def _produce_eval_function(self,
+                               target_tool_config: np.array,
+                               coupling_matrix: np.array,
+                               coupling_min: np.array,
+                               coupling_max: np.array):
+        def evaluate(**kwargs):
+            configuration = np.array(list(kwargs.values()))
+            coupled_config = coupling_matrix @ configuration
+            coupling_flags = np.logical_and(coupled_config <= coupling_max, coupled_config >= coupling_min)
+            if not np.all(coupling_flags):
+                return 10  # return a sentinel distance for an invalid configuration (can be improved probably)
+
+            self.update_config(configuration)
+            # TODO: optimization possible by deactivating gradient computation
+            tool_config = self.tool_config_vector
+            return -np.linalg.norm(tool_config - target_tool_config, ord=2)
+
+        return evaluate
+
+    def inverse_kinematics(self,
+                           target_tool_config: np.array,
+                           bounds: list,
+                           coupling_matrix : np.array,
+                           coupling_min: np.array,
+                           coupling_max: np.array):
+        # TODO: check coupling matrix on consistency
+        with self._backup():
+            optimizer = BayesianOptimization(
+                f=self._produce_eval_function(target_tool_config,
+                                              coupling_matrix,
+                                              coupling_min,
+                                              coupling_max),
+                pbounds=dict([(f'i{i}', bound) for i, bound in enumerate(bounds)]),
+                verbose=False,
+                random_state=123456)
+            # TODO: search until convergence
+            optimizer.maximize(n_iter=100)
+
+        return optimizer.max['target'], list(optimizer.max['params'].values())
+
     def _get_joint_variables(self):
         variables = [joint.get_variable() for joint in self.joints]
         return variables
@@ -232,3 +277,14 @@ class ManipulatorCore:
         speeds = torch.tensor([joint.get_speed() for joint in self.joints])
         return speeds
 
+    def get_joint_positions(self):
+        return [joint.get_joint_position() for joint in self.joints]
+
+    def __enter__(self):
+        self._backup_config = [joint.get_joint_position() for joint in self.joints]
+
+    def __exit__(self, *args):
+        self.update_config(self._backup_config)
+
+    def _backup(self):
+        return self

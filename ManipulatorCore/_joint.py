@@ -32,13 +32,13 @@ class Joint:
         self.joint_type = joint_type
         
         if joint_type == 'revolute':
-            self.joint_angle = Variable(tns(self.sanitize_angle(joint_angle),dtype=torch.float),
+            self.joint_angle = Variable(tns([self.sanitize_angle(joint_angle)], dtype=torch.float),
                                         requires_grad=True)
             self.joint_length = self.sanitize_length(joint_length, 'joint_length')
             self.generalized_var = self.joint_angle  # ref
         else :
             self.joint_angle = tns(self.sanitize_angle(joint_angle))
-            self.joint_length = Variable(tns(self.sanitize_length(joint_length, 'joint_length'), dtype=torch.float),
+            self.joint_length = Variable(tns([self.sanitize_length(joint_length, 'joint_length')], dtype=torch.float),
                                          requires_grad=True)
             self.generalized_var = self.joint_length  # ref
         
@@ -46,7 +46,7 @@ class Joint:
         self.link_twist_angle = tns(self.sanitize_angle(link_twist_angle))
 
     def sanitize_length(self, length, arg_name):
-        if length < 0 :
+        if length < 0:
             raise ValueError(f'Expected a non-negative value of argument {arg_name}.'
                              f'Got {length}')
         return length
@@ -57,10 +57,11 @@ class Joint:
         return angle
     
     def set_variable(self, value: float):
-        if self.joint_type == 'revolute':
-            self.joint_angle[0] = self.sanitize_angle(value)
-        else:
-            self.joint_length[0] = self.sanitize_length(value)
+        with torch.no_grad():
+            if self.joint_type == 'revolute':
+                self.joint_angle[0] = self.sanitize_angle(value)
+            else:
+                self.joint_length[0] = self.sanitize_length(value, 'joint_length')
             
     def set_joint_speed(self, value: float):
         self.joint_speed = value
@@ -81,5 +82,8 @@ class Joint:
         
     def get_variable(self):
         return self.generalized_var
+
+    def get_joint_position(self):
+        return self.generalized_var[0].item()
     
     
