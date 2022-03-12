@@ -1,5 +1,5 @@
 
-from typing import Literal, List
+from typing import Literal, List, Union
 
 from ._math import *
 from ._joint import Joint
@@ -10,8 +10,7 @@ from scipy.linalg import svd
 import torch
 import numpy as np
 
-from bayes_opt import BayesianOptimization
-
+from bayes_opt import BayesianOptimization, SequentialDomainReductionTransformer
 
 
 class ManipulatorCore:
@@ -112,19 +111,23 @@ class ManipulatorCore:
         # TODO
         return None
 
-    def update_config(self, actuation: List = None, joint_speeds: List = None):
+    def update_config(self, joint_positions: List = None, joint_speeds: List = None):
         self._delete_targets()
-        if actuation is None:  #think about that: a warning is more reasonable
-            actuation = np.zeros((len(self.joints),))
-        elif len(actuation) != len(self.joints):
+
+        if joint_positions is None:
+            raise ValueError(f'Argumemt joint_positions is None.')
+        elif len(joint_positions) != len(self.joints):
             raise ValueError(f'Setting actuation requires {len(self.joints)} parameters.')
-            
-        #
-        #   TODO: check joint_speeds
-        #
+
+        if joint_speeds is not None and len(joint_positions) != len(self.joints):
+            raise ValueError(f'Settig joint speeds requires {len(self.joints)} parameters.')
+
         for i, joint in enumerate(self.joints):
-            joint.set_variable(actuation[i])
-            #joint.set_speed(joint_speeds[i])  # TODO
+            joint.set_variable(joint_positions[i])
+
+        if joint_speeds is not None:
+            for i, joint in enumerate(self.joints):
+                joint.set_variable(joint_positions[i])
         
     def _calculate_arm_matrix(self):
         local_transforms = [joint.get_transformation() for joint in self.joints]
@@ -145,7 +148,7 @@ class ManipulatorCore:
     def _calculate_tool_config_vector(self):
         
         """
-            Calculate tool_config_vecor
+            Calculate tool_config_vector
         """
         tool_tip_position = self.arm_matrices[-1][:-1, -1]
         approach_vector = self.arm_matrices[-1][:3, 2]
@@ -212,8 +215,6 @@ class ManipulatorCore:
         return linear_velocities.detach().numpy()
 
     def _calculate_angular_link_velocity(self, joint_speeds):
-
-        # build mask, where 1 indicates the joint being a revolute joint
         with torch.no_grad():
             revolute_mask = torch.tensor([joint.is_revolute() for joint in self.joints])
 
@@ -239,11 +240,12 @@ class ManipulatorCore:
             coupled_config = coupling_matrix @ configuration
             coupling_flags = np.logical_and(coupled_config <= coupling_max, coupled_config >= coupling_min)
             if not np.all(coupling_flags):
-                return 10  # return a sentinel distance for an invalid configuration (can be improved probably)
+                return -10  # return a sentinel distance for an invalid configuration (better strategy?)
 
             self.update_config(configuration)
-            # TODO: optimization possible by deactivating gradient computation
-            tool_config = self.tool_config_vector
+            with torch.no_grad():
+                tool_config = self.tool_config_vector
+
             return -np.linalg.norm(tool_config - target_tool_config, ord=2)
 
         return evaluate
@@ -251,20 +253,27 @@ class ManipulatorCore:
     def inverse_kinematics(self,
                            target_tool_config: np.array,
                            bounds: list,
-                           coupling_matrix : np.array,
+                           coupling_matrix: np.array,
                            coupling_min: np.array,
-                           coupling_max: np.array):
-        # TODO: check coupling matrix on consistency
+                           coupling_max: np.array,
+                           random_state: Union[int, np.random.RandomState] = 123456):
+        """
+            TODO: docstring
+
+        """
+        # TODO: check arguments for consistency
         with self._backup():
+            bounds_transformer = SequentialDomainReductionTransformer()
             optimizer = BayesianOptimization(
                 f=self._produce_eval_function(target_tool_config,
                                               coupling_matrix,
                                               coupling_min,
                                               coupling_max),
-                pbounds=dict([(f'i{i}', bound) for i, bound in enumerate(bounds)]),
+                pbounds=dict([(f'q{i}', bound) for i, bound in enumerate(bounds)]),
                 verbose=False,
-                random_state=123456)
-            # TODO: search until convergence
+                bounds_transformer=bounds_transformer,
+                random_state=random_state)
+            # TODO: search until convergence: requires modification to bayes_opt
             optimizer.maximize(n_iter=100)
 
         return optimizer.max['target'], list(optimizer.max['params'].values())
@@ -274,8 +283,7 @@ class ManipulatorCore:
         return variables
      
     def _get_joint_speeds(self):
-        speeds = torch.tensor([joint.get_speed() for joint in self.joints])
-        return speeds
+        return torch.tensor([joint.get_speed() for joint in self.joints])
 
     def get_joint_positions(self):
         return [joint.get_joint_position() for joint in self.joints]
