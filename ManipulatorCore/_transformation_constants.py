@@ -37,21 +37,21 @@ sockets = [
 ]
 
 sin_mask = [
-    
+    # x-rotation
     tns([
             [0, 0, 0, 0], 
             [0, 0, -1, 0], 
             [0, 1, 0, 0], 
             [0, 0, 0, 0] 
         ], dtype=torch.float),
-    
+    # y-rotation
     tns([
             [0, 0, 1, 0], 
             [0, 0, 0, 0], 
             [-1, 0, 0, 0], 
             [0, 0, 0, 0] 
         ], dtype=torch.float),
-    
+    # z-rotation
     tns([
             [0, -1, 0, 0], 
             [1, 0, 0, 0], 
@@ -61,21 +61,21 @@ sin_mask = [
 ]
 
 cos_mask = [
-    
+    # x-rotation
     tns([
             [0, 0, 0, 0], 
             [0, 1, 0, 0], 
             [0, 0, 1, 0], 
             [0, 0, 0, 0] 
-        ], dtype=torch.float), 
-    
+        ], dtype=torch.float),
+    # y-rotation
     tns([
             [1, 0, 0, 0], 
             [0, 0, 0, 0], 
             [0, 0, 1, 0], 
             [0, 0, 0, 0] 
-        ], dtype=torch.float), 
-    
+        ], dtype=torch.float),
+    # z-rotation
     tns([
             [1, 0, 0, 0], 
             [0, 1, 0, 0], 
@@ -85,21 +85,21 @@ cos_mask = [
 ]
 
 trans_mask = [
-    
+    # x-translation
     tns([
         [0, 0, 0, 1], 
         [0, 0, 0, 0], 
         [0, 0, 0, 0], 
         [0, 0, 0, 0] 
     ], dtype=torch.float), 
-    
+    # y-translation
     tns([
         [0, 0, 0, 0], 
         [0, 0, 0, 1], 
         [0, 0, 0, 0], 
         [0, 0, 0, 0] 
     ], dtype=torch.float), 
-    
+    # z-translation
     tns([
         [0, 0, 0, 0], 
         [0, 0, 0, 0], 
@@ -107,5 +107,3 @@ trans_mask = [
         [0, 0, 0, 0] 
     ], dtype=torch.float)  
 ]
-
-ZERO_1D = tns([0], dtype=torch.float)

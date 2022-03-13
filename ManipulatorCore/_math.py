@@ -1,68 +1,99 @@
 
-import numpy as np
-import torch
-from torch import tensor as tns
+from typing import Union
+from torch.autograd import Variable
+from torch import tensor
 from ._transformation_constants import *
 
-def rot(angle, axis: int):
+
+def _rot(angle, axis: int):
     
     """
         fundamental homogenous rotation matrix
     """
-    if axis not in [0, 1, 2]:
-        raise ValueError('Fundamental rotation matrix axis are selected from {0,1,2}.'
-                         f'Got {axis}')
-                         
     cos, sin = torch.cos(angle), torch.sin(angle)
     return sockets[axis] + cos_mask[axis]*cos + sin_mask[axis]*sin
 
 
-def tran(x_tran = ZERO_1D, y_tran = ZERO_1D, z_tran = ZERO_1D):
+def _tran(translation, axis: int):
     
     """
         fundamental homogenous translation matrix
     """
-    return sockets[-1] + x_tran*trans_mask[0] + y_tran*trans_mask[1] + z_tran*trans_mask[2]
+    return sockets[-1] + translation*trans_mask[axis]
 
 
-def transformation_from_kinematic_parameters(theta, d, a, alpha):
+def transformation_from_kinematic_parameters(theta: Union[tensor, Variable],
+                                             d: Union[tensor, Variable],
+                                             a: Union[tensor, Variable],
+                                             alpha: Union[tensor, Variable]):
     
     """
         Transformation matrix from kinematic parameters
         
         parameters
         ----------
-        theta : float
+        theta : float, torch.tensor, torch.autograd.Variable
             Denavit-Hartenberg parameter : joint angle
-        d : float
+        d : float, torch.tensor, torch.autograd.Variable
             Denavit-Hartenberg parameter : joint length
-        a : float
+        a : float, torch.tensor, torch.autograd.Variable
             Denavit-Hartenberg parameter : link length
-        alpha : float
+        alpha : float, torch.tensor, torch.autograd.Variable
             Denavit-Hartenberg parameter : link twist angle
     """
     matrices = [
             
-            rot(theta,2),
-            tran(ZERO_1D,ZERO_1D,d),
-            tran(a),
-            rot(alpha,0),
+            _rot(theta, 2),
+            _tran(d, 2),
+            _tran(a, 0),
+            _rot(alpha, 0),
     ]
     return matmul(*matrices, retain_intermediates=False)
 
 
-def matmul(*matrices, retain_intermediates = True):
+def screw_rotation(axis: int,
+                   angle: Union[tensor, Variable],
+                   translation: Union[tensor, Variable]):
+
+    """
+        Calculates Screw rotation (rotation and translation along the same axis)
+
+        parameters
+        ----------
+        axis : int
+            axis along the screw rotation is conducted
+        angle: float, torch.tensor, torch.autograd.Variable
+            angle by which the system rotates
+        translation: float, torch.tensor, torch.autograd.Variable
+            translation by which the system translates
+    """
+    rotation = _rot(angle, axis)
+    translation = _tran(translation, axis)
+
+    return rotation @ translation
+
+
+def matmul(*matrices, retain_intermediates=True):
     
     """
         Utility function : multiply matrices from left to right
-        Retains intermediate results
+        Retains intermediate results if specififed
+
+        parameters
+        ----------
+
+        matrices : list
+            List of np.array matrices to be multiplied
+        retain_intermediates : bool
+            Flag indicating the retaining of intermediate matrix multiplication results
+
+        returns
+        -------
+        resulting np.array matrix or list of np.array matrices
     """
     intermediates = [matrices[0]]
     for i in range(1, len(matrices)):
-        #matmul alloctes a new tensor => intermediate tensors are independently allocated tensors
         intermediates.append(intermediates[-1] @ matrices[i])
 
-    if retain_intermediates:
-        return intermediates
-    else:
-        return intermediates[-1]
+    return intermediates if retain_intermediates else intermediates[-1]
+

@@ -127,7 +127,7 @@ class ManipulatorCore:
 
         if joint_speeds is not None:
             for i, joint in enumerate(self.joints):
-                joint.set_variable(joint_positions[i])
+                joint.joint_speed = joint_speeds[i]
         
     def _calculate_arm_matrix(self):
         local_transforms = [joint.get_transformation() for joint in self.joints]
@@ -154,7 +154,7 @@ class ManipulatorCore:
         approach_vector = self.arm_matrices[-1][:3, 2]
 
         final_joint = self.joints[-1]
-        if final_joint.joint_type == 'revolute':
+        if final_joint.is_revolute:
             approach_vector = torch.exp(final_joint.get_variable() / np.pi) * approach_vector
         
         return torch.cat([tool_tip_position, approach_vector], axis=0)
@@ -174,7 +174,7 @@ class ManipulatorCore:
                                              retain_graph=(i != 5)))
            #Remark: zeroing the gradients is already internally handled by autograd
         return np.around(np.array(grads), 4)
-        
+
     def _calculate_rmrc_matrix(self):
         try:
             return np.linalg.pinv(self.tool_jacobian)
@@ -283,16 +283,16 @@ class ManipulatorCore:
         return variables
      
     def _get_joint_speeds(self):
-        return torch.tensor([joint.get_speed() for joint in self.joints])
+        return torch.tensor([joint.joint_speed for joint in self.joints])
 
     def get_joint_positions(self):
         return [joint.get_joint_position() for joint in self.joints]
 
     def __enter__(self):
-        self._backup_config = [joint.get_joint_position() for joint in self.joints]
+      self._backup_config = [joint.get_joint_position() for joint in self.joints]
 
     def __exit__(self, *args):
-        self.update_config(self._backup_config)
+     self.update_config(self._backup_config)
 
     def _backup(self):
         return self
