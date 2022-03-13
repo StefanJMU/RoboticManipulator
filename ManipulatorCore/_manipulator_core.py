@@ -63,7 +63,7 @@ class ManipulatorCore:
         
     @cached_property
     def arm_matrix(self):
-        return self.arm_matrices[-1].detach().numpy()
+        return np.around(self.arm_matrices[-1].detach().numpy(), 2)
 
     @cached_property
     def inverse_arm_matrix(self):
